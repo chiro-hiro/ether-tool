@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ETH Wallet Validator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Sora:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg-primary: #0a0a0f;
+    --bg-card: #12121a;
+    --bg-card-hover: #181825;
+    --bg-input: #1a1a28;
+    --border: #2a2a3d;
+    --border-active: #6366f1;
+    --text-primary: #e8e8f0;
+    --text-secondary: #8888a8;
+    --text-muted: #555570;
+    --accent: #6366f1;
+    --accent-glow: rgba(99, 102, 241, 0.3);
+    --success: #22c55e;
+    --success-glow: rgba(34, 197, 94, 0.2);
+    --error: #ef4444;
+    --error-glow: rgba(239, 68, 68, 0.2);
+    --warning: #f59e0b;
+    --eth-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Sora', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .bg-orb {
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .bg-orb-1 { top: -200px; right: -100px; background: #6366f1; }
+  .bg-orb-2 { bottom: -200px; left: -100px; background: #8b5cf6; }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 40px 20px 60px;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+    animation: fadeDown 0.6s ease-out;
+  }
+
+  .eth-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    position: relative;
+  }
+  .eth-icon svg { width: 100%; height: 100%; }
+  .eth-icon::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    background: var(--accent-glow);
+    filter: blur(16px);
+    z-index: -1;
+    animation: pulse 3s ease-in-out infinite;
+  }
+
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+    background: var(--eth-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 20px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    animation: fadeUp 0.5s ease-out both;
+  }
+  .card:nth-child(2) { animation-delay: 0.1s; }
+  .card:nth-child(3) { animation-delay: 0.2s; }
+  .card:hover {
+    border-color: rgba(99,102,241,0.2);
+    box-shadow: 0 0 40px rgba(99,102,241,0.05);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .card-step {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .card-step.done {
+    background: rgba(34,197,94,0.15);
+    border-color: rgba(34,197,94,0.3);
+    color: var(--success);
+  }
+  .card-title {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+
+  /* ── Wallet Status ── */
+  .wallet-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    word-break: break-all;
+    line-height: 1.5;
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-dot.connected { background: var(--success); box-shadow: 0 0 8px var(--success-glow); }
+  .status-dot.disconnected { background: var(--text-muted); }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-family: 'Sora', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s;
+    width: 100%;
+    letter-spacing: -0.2px;
+  }
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+  }
+  .btn-primary {
+    background: var(--eth-gradient);
+    color: white;
+    box-shadow: 0 4px 20px var(--accent-glow);
+  }
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 28px rgba(99,102,241,0.4);
+  }
+  .btn-secondary {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    border-color: var(--border-active);
+    background: var(--bg-card-hover);
+  }
+
+  /* ── Input ── */
+  .input-group { margin-bottom: 16px; }
+  .input-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  textarea, input[type="text"] {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    resize: vertical;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    outline: none;
+    line-height: 1.6;
+  }
+  textarea:focus, input[type="text"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  textarea { min-height: 80px; }
+
+  /* ── Result Box ── */
+  .result-box {
+    padding: 16px;
+    border-radius: 12px;
+    margin-top: 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    animation: fadeUp 0.3s ease-out;
+  }
+  .result-box.success {
+    background: rgba(34,197,94,0.08);
+    border: 1px solid rgba(34,197,94,0.2);
+    color: var(--success);
+  }
+  .result-box.error {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.2);
+    color: var(--error);
+  }
+  .result-box.info {
+    background: rgba(99,102,241,0.08);
+    border: 1px solid rgba(99,102,241,0.2);
+    color: var(--accent);
+  }
+  .result-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .result-content { word-break: break-all; }
+  .result-content strong { display: block; margin-bottom: 4px; font-weight: 600; }
+
+  /* ── Signature Display ── */
+  .sig-display {
+    padding: 14px 16px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    word-break: break-all;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    margin-top: 12px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .sig-display .sig-label {
+    font-family: 'Sora', sans-serif;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  /* ── Divider ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 20px 0;
+  }
+
+  /* ── Animations ── */
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    flex-shrink: 0;
+  }
+
+  .no-metamask {
+    text-align: center;
+    padding: 40px 20px;
+  }
+  .no-metamask p { color: var(--text-secondary); margin-bottom: 20px; }
+  .no-metamask a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .no-metamask a:hover { text-decoration: underline; }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-offchain {
+    background: rgba(245,158,11,0.12);
+    color: var(--warning);
+    border: 1px solid rgba(245,158,11,0.2);
+  }
+</style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-orb bg-orb-1"></div>
+  <div class="bg-orb bg-orb-2"></div>
+
+  <div class="container" id="app"></div>
+
+  <script>
+    const app = document.getElementById('app');
+
+    // ── State ──
+    let state = {
+      hasMetaMask: typeof window.ethereum !== 'undefined' && window.ethereum.isMetaMask,
+      account: null,
+      message: 'I am verifying my wallet ownership for address validation.\n\nTimestamp: ' + new Date().toISOString(),
+      signature: null,
+      signing: false,
+      verifying: false,
+      verifyResult: null,         // { success, address, match }
+      verifyAddress: '',
+      verifySignature: '',
+      verifyMessage: '',
+    };
+
+    function setState(updates) {
+      Object.assign(state, updates);
+      render();
+    }
+
+    // ── Ethereum Helpers ──
+    async function connectWallet() {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        if (accounts.length > 0) {
+          setState({ account: accounts[0] });
+        }
+      } catch (err) {
+        console.error('Connection rejected:', err);
+      }
+    }
+
+    async function signMessage() {
+      if (!state.account || !state.message.trim()) return;
+      setState({ signing: true, signature: null });
+      try {
+        const msg = state.message;
+        const hexMsg = '0x' + Array.from(new TextEncoder().encode(msg)).map(b => b.toString(16).padStart(2, '0')).join('');
+        const sig = await window.ethereum.request({
+          method: 'personal_sign',
+          params: [hexMsg, state.account],
+        });
+        setState({
+          signing: false,
+          signature: sig,
+          verifyAddress: state.account,
+          verifySignature: sig,
+          verifyMessage: msg,
+        });
+      } catch (err) {
+        console.error('Signing rejected:', err);
+        setState({ signing: false });
+      }
+    }
+
+    async function verifySignature() {
+      const { verifyAddress, verifySignature: sig, verifyMessage: msg } = state;
+      if (!sig || !msg || !verifyAddress) return;
+
+      setState({ verifying: true, verifyResult: null });
+
+      try {
+        const hexMsg = '0x' + Array.from(new TextEncoder().encode(msg)).map(b => b.toString(16).padStart(2, '0')).join('');
+        const recovered = await window.ethereum.request({
+          method: 'personal_ecRecover',
+          params: [hexMsg, sig],
+        });
+        const match = recovered.toLowerCase() === verifyAddress.toLowerCase();
+        setState({
+          verifying: false,
+          verifyResult: { success: true, address: recovered, match },
+        });
+      } catch (err) {
+        console.error('Verification failed:', err);
+        setState({
+          verifying: false,
+          verifyResult: { success: false, error: err.message },
+        });
+      }
+    }
+
+    function truncateAddr(addr) {
+      if (!addr) return '';
+      return addr.slice(0, 6) + '···' + addr.slice(-4);
+    }
+
+    // ── Listen for account changes ──
+    if (state.hasMetaMask) {
+      window.ethereum.on('accountsChanged', (accounts) => {
+        setState({
+          account: accounts[0] || null,
+          signature: null,
+          verifyResult: null,
+        });
+      });
+    }
+
+    // ── Render ──
+    function render() {
+      if (!state.hasMetaMask) {
+        app.innerHTML = `
+          <div class="header">
+            <div class="eth-icon">
+              <svg viewBox="0 0 256 417" xmlns="http://www.w3.org/2000/svg">
+                <path fill="#8b5cf6" d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/>
+                <path fill="#a78bfa" d="M127.962 0L0 212.32l127.962 75.639V154.158z"/>
+                <path fill="#8b5cf6" d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.6L256 236.587z"/>
+                <path fill="#a78bfa" d="M127.962 416.905V312.187L0 236.587z"/>
+              </svg>
+            </div>
+            <h1>Wallet Validator</h1>
+            <p>Off-chain signature verification</p>
+          </div>
+          <div class="card no-metamask">
+            <p>MetaMask is not detected in your browser.<br>Please install it to use this tool.</p>
+            <a href="https://metamask.io/download/" target="_blank" rel="noopener">Install MetaMask →</a>
+          </div>
+        `;
+        return;
+      }
+
+      const connected = !!state.account;
+
+      app.innerHTML = `
+        <div class="header">
+          <div class="eth-icon">
+            <svg viewBox="0 0 256 417" xmlns="http://www.w3.org/2000/svg">
+              <path fill="#8b5cf6" d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/>
+              <path fill="#a78bfa" d="M127.962 0L0 212.32l127.962 75.639V154.158z"/>
+              <path fill="#8b5cf6" d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.6L256 236.587z"/>
+              <path fill="#a78bfa" d="M127.962 416.905V312.187L0 236.587z"/>
+            </svg>
+          </div>
+          <h1>Wallet Validator</h1>
+          <p>Verify wallet ownership via off-chain signatures &nbsp;<span class="badge badge-offchain">No Gas Fees</span></p>
+        </div>
+
+        <!-- Step 1: Connect -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-step ${connected ? 'done' : ''}">
+              ${connected ? '✓' : '1'}
+            </div>
+            <div class="card-title">Connect Wallet</div>
+          </div>
+          <div class="wallet-status">
+            <div class="status-dot ${connected ? 'connected' : 'disconnected'}"></div>
+            ${connected
+              ? '<span style="color:var(--success);">' + state.account + '</span>'
+              : '<span style="color:var(--text-muted);">No wallet connected</span>'
+            }
+          </div>
+          ${!connected
+            ? '<button class="btn btn-primary" id="btn-connect"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Connect MetaMask</button>'
+            : ''
+          }
+        </div>
+
+        <!-- Step 2: Sign Message -->
+        <div class="card" style="opacity: ${connected ? 1 : 0.4}; pointer-events: ${connected ? 'auto' : 'none'};">
+          <div class="card-header">
+            <div class="card-step ${state.signature ? 'done' : ''}">
+              ${state.signature ? '✓' : '2'}
+            </div>
+            <div class="card-title">Sign Message</div>
+          </div>
+          <div class="input-group">
+            <label>Message to sign</label>
+            <textarea id="sign-message">${state.message}</textarea>
+          </div>
+          <button class="btn btn-primary" id="btn-sign" ${!connected || state.signing ? 'disabled' : ''}>
+            ${state.signing
+              ? '<div class="spinner"></div> Waiting for MetaMask...'
+              : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Sign Message'
+            }
+          </button>
+          ${state.signature ? `
+            <div class="sig-display">
+              <div class="sig-label">Signature (hex)</div>
+              ${state.signature}
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Step 3: Verify Signature -->
+        <div class="card" style="opacity: ${connected ? 1 : 0.4}; pointer-events: ${connected ? 'auto' : 'none'};">
+          <div class="card-header">
+            <div class="card-step ${state.verifyResult?.match ? 'done' : ''}">
+              ${state.verifyResult?.match ? '✓' : '3'}
+            </div>
+            <div class="card-title">Verify Signature</div>
+          </div>
+          <div class="input-group">
+            <label>Wallet address to verify</label>
+            <input type="text" id="verify-address" value="${state.verifyAddress}" placeholder="0x..." />
+          </div>
+          <div class="input-group">
+            <label>Message that was signed</label>
+            <textarea id="verify-message">${state.verifyMessage}</textarea>
+          </div>
+          <div class="input-group">
+            <label>Signature</label>
+            <textarea id="verify-signature" style="min-height:64px;">${state.verifySignature}</textarea>
+          </div>
+          <button class="btn btn-secondary" id="btn-verify"
+            ${!state.verifyAddress || !state.verifySignature || !state.verifyMessage || state.verifying ? 'disabled' : ''}>
+            ${state.verifying
+              ? '<div class="spinner"></div> Verifying...'
+              : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg> Verify Ownership'
+            }
+          </button>
+
+          ${state.verifyResult ? renderResult() : ''}
+        </div>
+      `;
+
+      // ── Bind Events ──
+      const btnConnect = document.getElementById('btn-connect');
+      if (btnConnect) btnConnect.addEventListener('click', connectWallet);
+
+      const btnSign = document.getElementById('btn-sign');
+      if (btnSign) btnSign.addEventListener('click', signMessage);
+
+      const btnVerify = document.getElementById('btn-verify');
+      if (btnVerify) btnVerify.addEventListener('click', verifySignature);
+
+      const signMsg = document.getElementById('sign-message');
+      if (signMsg) signMsg.addEventListener('input', e => { state.message = e.target.value; });
+
+      const vAddr = document.getElementById('verify-address');
+      if (vAddr) vAddr.addEventListener('input', e => { state.verifyAddress = e.target.value; });
+
+      const vMsg = document.getElementById('verify-message');
+      if (vMsg) vMsg.addEventListener('input', e => { state.verifyMessage = e.target.value; });
+
+      const vSig = document.getElementById('verify-signature');
+      if (vSig) vSig.addEventListener('input', e => { state.verifySignature = e.target.value; });
+    }
+
+    function renderResult() {
+      const r = state.verifyResult;
+      if (!r.success) {
+        return `
+          <div class="result-box error">
+            <span class="result-icon">✕</span>
+            <div class="result-content">
+              <strong>Verification Failed</strong>
+              ${r.error || 'Could not recover address from signature.'}
+            </div>
+          </div>
+        `;
+      }
+      if (r.match) {
+        return `
+          <div class="result-box success">
+            <span class="result-icon">✓</span>
+            <div class="result-content">
+              <strong>Ownership Verified</strong>
+              Recovered address <b>${r.address}</b> matches the provided wallet. This address is confirmed as the signer.
+            </div>
+          </div>
+        `;
+      } else {
+        return `
+          <div class="result-box error">
+            <span class="result-icon">✕</span>
+            <div class="result-content">
+              <strong>Address Mismatch</strong>
+              Recovered: <b>${r.address}</b><br>
+              The signature was produced by a different wallet than the one provided.
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // ── Initial Render ──
+    render();
+
+    // Auto-connect if already authorized
+    if (state.hasMetaMask) {
+      window.ethereum.request({ method: 'eth_accounts' }).then(accounts => {
+        if (accounts.length > 0) setState({ account: accounts[0] });
+      });
+    }
+  </script>
+</body>
+</html>
