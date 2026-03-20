@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Vesting Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.15.0/ethers.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0b0f;
+    --surface: #12131a;
+    --surface2: #1a1b25;
+    --border: #252636;
+    --border-bright: #3a3b52;
+    --text: #e4e4ef;
+    --text-dim: #8888a4;
+    --text-muted: #55556a;
+    --accent: #6ee7b7;
+    --accent-dim: rgba(110,231,183,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+    --blue: #93c5fd;
+    --blue-dim: rgba(147,197,253,0.12);
+    --yellow: #fde68a;
+    --yellow-dim: rgba(253,230,138,0.12);
+    --purple: #c4b5fd;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; min-height: 100%; min-height: 100dvh; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; -webkit-text-size-adjust: 100%; }
+
+  .grain { position: fixed; inset: 0; pointer-events: none; z-index: 999; opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .container { width: 100%; max-width: 1600px; margin: 0 auto; padding: 32px 24px 60px; }
+
+  /* ── Header ── */
+  .header { margin-bottom: 32px; position: relative; }
+  .header::after { content: ''; position: absolute; bottom: -16px; left: 0; width: 100%; height: 1px; background: linear-gradient(90deg, var(--accent), transparent 60%); }
+  .header-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .header-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); animation: pulse 2s infinite; flex-shrink: 0; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .header h1 { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+  .header h1 span { color: var(--accent); }
+  .meta-row { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; line-height: 1.6; }
+  .meta-row a { color: var(--text-dim); text-decoration: none; transition: color .2s; word-break: break-all; }
+  .meta-row a:hover { color: var(--accent); }
+  .token-name { color: var(--purple); font-weight: 600; }
+
+  /* ── Summary Cards ── */
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; position: relative; overflow: hidden; transition: border-color .2s; }
+  .summary-card:hover { border-color: var(--border-bright); }
+  .summary-card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+  .summary-card .value { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; word-break: break-all; }
+  .summary-card .sub { font-size: 11px; color: var(--text-dim); margin-top: 3px; word-break: break-all; }
+  .summary-card.accent .value { color: var(--accent); }
+  .summary-card.red .value { color: var(--red); }
+  .summary-card.blue .value { color: var(--blue); }
+  .summary-card.yellow .value { color: var(--yellow); }
+
+  /* ── Table (desktop) ── */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .table-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .table-header h2 { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; }
+  .table-header .count { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); background: var(--surface2); padding: 3px 8px; border-radius: 5px; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; min-width: 1100px; }
+  thead th { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 600; padding: 10px 12px; text-align: left; background: var(--surface2); border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; z-index: 2; }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .15s; }
+  tbody tr:hover { background: rgba(110,231,183,0.02); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 10px 12px; font-size: 12px; color: var(--text-dim); white-space: nowrap; vertical-align: middle; }
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .addr { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--blue); text-decoration: none; transition: color .2s; }
+  .addr:hover { color: var(--accent); }
+  .progress-bar { width: 100%; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; min-width: 60px; }
+  .progress-bar .fill { height: 100%; border-radius: 3px; }
+  .fill-green { background: var(--accent); }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+  .badge-active { background: var(--accent-dim); color: var(--accent); }
+  .badge-ended { background: var(--red-dim); color: var(--red); }
+  .badge-pending { background: var(--yellow-dim); color: var(--yellow); }
+  .rpc-status { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); padding: 8px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
+  .rpc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+  /* Desktop: show table, hide cards */
+  .desktop-table { display: block; }
+  .mobile-cards { display: none; }
+
+  /* ── Mobile Cards ── */
+  .vcard { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+  .vcard-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
+  .vcard-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); font-weight: 600; }
+  .vcard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .vcard-item { display: flex; flex-direction: column; gap: 2px; }
+  .vcard-item.full { grid-column: 1 / -1; }
+  .vcard-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 600; }
+  .vcard-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); word-break: break-all; }
+  .vcard-progress { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+  .vcard-progress .progress-bar { flex: 1; height: 6px; }
+
+  /* Loading */
+  .loading-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; gap: 16px; min-height: 50vh; min-height: 50dvh; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); text-align: center; }
+  .loading-sub { font-size: 11px; color: var(--text-muted); text-align: center; max-width: 300px; }
+  .error-box { background: var(--red-dim); border: 1px solid rgba(248,113,113,0.3); border-radius: 8px; padding: 14px 16px; color: var(--red); font-size: 12px; margin: 16px 0; font-family: 'JetBrains Mono', monospace; word-break: break-word; }
+  .retry-btn { background: var(--accent); color: var(--bg); border: none; padding: 8px 20px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 860px) {
+    .container { padding: 16px 12px 40px; }
+    .header h1 { font-size: 18px; }
+    .meta-row { font-size: 10px; }
+    .summary-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .summary-card { padding: 12px; }
+    .summary-card .value { font-size: 16px; }
+    .summary-card .sub { font-size: 10px; }
+    .desktop-table { display: none; }
+    .mobile-cards { display: block; }
+  }
+
+  @media (max-width: 420px) {
+    .container { padding: 12px 8px 32px; }
+    .header h1 { font-size: 16px; }
+    .summary-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+    .summary-card { padding: 10px; border-radius: 8px; }
+    .summary-card .value { font-size: 14px; }
+    .summary-card .label { font-size: 9px; letter-spacing: 1px; }
+    .vcard { padding: 12px; }
+    .vcard-val { font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="container" id="app"></div>
+
+<script>
+var CONTRACT = '0x059aE3E163aBa361e6c4a0BEeC4891bD36eB19E3';
+
+var RPC_LIST = [
+  'https://ethereum-rpc.publicnode.com',
+  'https://rpc.ankr.com/eth',
+  'https://1rpc.io/eth',
+  'https://eth.drpc.org',
+  'https://eth.merkle.io',
+  'https://eth-mainnet.public.blastapi.io',
+  'https://rpc.flashbots.net',
+  'https://eth.meowrpc.com',
+  'https://0xrpc.io/eth',
+  'https://endpoints.omniatech.io/v1/eth/mainnet/public',
+  'https://ethereum.blockpi.network/v1/rpc/public',
+  'https://rpc.builder0x69.io',
+];
+
+var vestingIface = new ethers.Interface([
+  "function getVestingContractTotal() view returns (uint256)",
+  "function getVestingDetailList(uint256 offset, uint256 limit) view returns (tuple(address contractAddress, address beneficiary, uint64 start, uint64 end, uint64 milestoneDuration, uint64 milestoneClaimed, uint256 milestoneReleaseAmount, uint256 unlockedAtTGE, uint256 totalClaimed, uint256 balanceClaimable, uint256 balanceRemain)[])",
+  "function getTokenAddress() view returns (address)",
+  "function getTimeTGE() view returns (uint256)",
+  "function isTGE() view returns (bool)"
+]);
+
+var erc20Iface = new ethers.Interface([
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+  "function name() view returns (string)"
+]);
+
+var rpcIdx = 0, callId = 1;
+function nextRpc() { var u = RPC_LIST[rpcIdx % RPC_LIST.length]; rpcIdx++; return u; }
+
+function rpcCall(rpcUrl, to, data) {
+  var id = callId++;
+  var timeout = new Promise(function(_, rej) { setTimeout(function() { rej(new Error('Timeout')); }, 15000); });
+  var request = fetch(rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_call', params: [{ to: to, data: data }, 'latest'], id: id })
+  }).then(function(r) { return r.json(); }).then(function(j) {
+    if (j.error) throw new Error(j.error.message || 'RPC error');
+    if (!j.result || j.result === '0x') throw new Error('Empty result');
+    return j.result;
+  });
+  return Promise.race([request, timeout]);
+}
+
+function callWithRetry(to, data, retries) {
+  retries = retries || 6; var attempt = 0, lastMsg = 'All RPCs failed';
+  function tryNext() {
+    if (attempt >= retries) return Promise.reject(new Error(lastMsg));
+    attempt++;
+    return rpcCall(nextRpc(), to, data).catch(function(e) {
+      lastMsg = e.message || 'RPC error';
+      return new Promise(function(r) { setTimeout(r, 300 * attempt); }).then(tryNext);
+    });
+  }
+  return tryNext();
+}
+
+function vestingCall(fn, args) {
+  var d = vestingIface.encodeFunctionData(fn, args || []);
+  return callWithRetry(CONTRACT, d).then(function(r) { return vestingIface.decodeFunctionResult(fn, r); });
+}
+function erc20Call(addr, fn) {
+  var d = erc20Iface.encodeFunctionData(fn);
+  return callWithRetry(addr, d).then(function(r) { return erc20Iface.decodeFunctionResult(fn, r); });
+}
+
+var app = document.getElementById('app');
+function fA(a) { return a.slice(0,6) + '\u2026' + a.slice(-4); }
+function fN(v, d, p) { d=d||18; p=p!=null?p:2; var n=parseFloat(ethers.formatUnits(v,d)); if(n>=1e9) return (n/1e9).toFixed(p)+'B'; if(n>=1e6) return (n/1e6).toFixed(p)+'M'; if(n>=1e3) return (n/1e3).toFixed(p)+'K'; return n.toFixed(p); }
+function fF(v, d) { return parseFloat(ethers.formatUnits(v,d||18)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fD(t) { if(!t||t==='0') return '\u2014'; return new Date(Number(t)*1000).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}); }
+function gS(s,e) { var n=Math.floor(Date.now()/1000); if(n<Number(s)) return 'pending'; if(n>=Number(e)) return 'ended'; return 'active'; }
+
+function showLoad(msg, sub) {
+  app.innerHTML = '<div class="header"><div class="header-top"><div class="header-dot"></div><h1>Vesting <span>Dashboard</span></h1></div></div>'
+    + '<div class="loading-container"><div class="spinner"></div><div class="loading-text">'+(msg||'Loading\u2026')+'</div>'
+    + (sub ? '<div class="loading-sub">'+sub+'</div>' : '') + '</div>';
+}
+
+function showErr(msg) {
+  app.innerHTML = '<div class="header"><div class="header-top"><div class="header-dot"></div><h1>Vesting <span>Dashboard</span></h1></div></div>'
+    + '<div class="error-box">Error: '+msg+'<br/><button class="retry-btn" onclick="loadData()">Retry</button></div>';
+}
+
+function render(d) {
+  var vs = d.vestings, dec = d.dec, sym = d.tokenSymbol;
+  var tU=0n, tL=0n, tC=0n, tCl=0n, gT=0n;
+  for (var i=0; i<vs.length; i++) {
+    var c_=BigInt(vs[i].totalClaimed), cl_=BigInt(vs[i].balanceClaimable), r_=BigInt(vs[i].balanceRemain);
+    tU+=c_+cl_; tL+=r_; tC+=c_; tCl+=cl_; gT+=c_+cl_+r_;
+  }
+  var oP = gT>0n ? Number((tU*10000n)/gT)/100 : 0;
+
+  // Build desktop table rows
+  var trows = '';
+  // Build mobile cards
+  var mcards = '';
+
+  for (var i=0; i<vs.length; i++) {
+    var v=vs[i];
+    var claimed=BigInt(v.totalClaimed), claimable=BigInt(v.balanceClaimable), remain=BigInt(v.balanceRemain);
+    var tgeUn=BigInt(v.unlockedAtTGE), unlocked=claimed+claimable, tot=unlocked+remain;
+    var pct = tot>0n ? Number((unlocked*10000n)/tot)/100 : 0;
+    var st=gS(v.start,v.end);
+    var bc = st==='active'?'badge-active':st==='ended'?'badge-ended':'badge-pending';
+    var durD=((Number(v.end)-Number(v.start))/86400).toFixed(0);
+    var milD=(Number(v.milestoneDuration)/86400).toFixed(0);
+
+    // Desktop row
+    trows += '<tr>'
+      +'<td class="mono" style="color:var(--text-muted)">'+(i+1)+'</td>'
+      +'<td><a class="addr" href="https://etherscan.io/address/'+v.beneficiary+'" target="_blank" title="'+v.beneficiary+'">'+fA(v.beneficiary)+'</a></td>'
+      +'<td><a class="addr" href="https://etherscan.io/address/'+v.contractAddress+'" target="_blank" title="'+v.contractAddress+'">'+fA(v.contractAddress)+'</a></td>'
+      +'<td class="mono">'+fD(v.start)+'</td>'
+      +'<td class="mono">'+fD(v.end)+'</td>'
+      +'<td class="mono">'+durD+'d</td>'
+      +'<td class="mono">'+milD+'d</td>'
+      +'<td class="mono" style="color:var(--yellow)">'+fN(tgeUn,dec)+'</td>'
+      +'<td class="mono" style="color:var(--text)">'+fN(tot,dec)+'</td>'
+      +'<td class="mono" style="color:var(--accent)">'+fN(claimed,dec)+'</td>'
+      +'<td class="mono" style="color:var(--blue)">'+fN(claimable,dec)+'</td>'
+      +'<td class="mono" style="color:var(--red)">'+fN(remain,dec)+'</td>'
+      +'<td><div style="display:flex;align-items:center;gap:6px"><div class="progress-bar"><div class="fill fill-green" style="width:'+pct+'%"></div></div><span class="mono" style="font-size:10px;color:var(--text-dim)">'+pct.toFixed(1)+'%</span></div></td>'
+      +'<td><span class="badge '+bc+'">'+st+'</span></td>'
+      +'</tr>';
+
+    // Mobile card
+    mcards += '<div class="vcard">'
+      +'<div class="vcard-top"><span class="vcard-num">#'+(i+1)+'</span><span class="badge '+bc+'">'+st+'</span></div>'
+      +'<div class="vcard-grid">'
+        +'<div class="vcard-item"><span class="vcard-label">Beneficiary</span><a class="addr" href="https://etherscan.io/address/'+v.beneficiary+'" target="_blank">'+fA(v.beneficiary)+'</a></div>'
+        +'<div class="vcard-item"><span class="vcard-label">Contract</span><a class="addr" href="https://etherscan.io/address/'+v.contractAddress+'" target="_blank">'+fA(v.contractAddress)+'</a></div>'
+        +'<div class="vcard-item"><span class="vcard-label">Start</span><span class="vcard-val">'+fD(v.start)+'</span></div>'
+        +'<div class="vcard-item"><span class="vcard-label">End</span><span class="vcard-val">'+fD(v.end)+'</span></div>'
+        +'<div class="vcard-item"><span class="vcard-label">Duration</span><span class="vcard-val">'+durD+'d</span></div>'
+        +'<div class="vcard-item"><span class="vcard-label">Milestone</span><span class="vcard-val">'+milD+'d</span></div>'
+        +'<div class="vcard-item"><span class="vcard-label">TGE Unlock</span><span class="vcard-val" style="color:var(--yellow)">'+fN(tgeUn,dec)+'</span></div>'
+        +'<div class="vcard-item"><span class="vcard-label">Total</span><span class="vcard-val" style="color:var(--text)">'+fN(tot,dec)+'</span></div>'
+        +'<div class="vcard-item"><span class="vcard-label">Claimed</span><span class="vcard-val" style="color:var(--accent)">'+fN(claimed,dec)+'</span></div>'
+        +'<div class="vcard-item"><span class="vcard-label">Claimable</span><span class="vcard-val" style="color:var(--blue)">'+fN(claimable,dec)+'</span></div>'
+        +'<div class="vcard-item"><span class="vcard-label">Remaining</span><span class="vcard-val" style="color:var(--red)">'+fN(remain,dec)+'</span></div>'
+        +'<div class="vcard-item"><span class="vcard-label">Vested</span><span class="vcard-val">'+pct.toFixed(1)+'%</span></div>'
+      +'</div>'
+      +'<div class="vcard-progress"><div class="progress-bar"><div class="fill fill-green" style="width:'+pct+'%"></div></div></div>'
+      +'</div>';
+  }
+
+  app.innerHTML = ''
+    // Header
+    +'<div class="header"><div class="header-top"><div class="header-dot"></div><h1>Vesting <span>Dashboard</span></h1></div>'
+    +'<div class="meta-row">'
+      +'<a href="https://etherscan.io/address/'+CONTRACT+'" target="_blank">'+CONTRACT+'</a>'
+      +'<span class="token-name">'+d.tokenName+' ('+sym+')</span>'
+      +'<span>Token: <a href="https://etherscan.io/address/'+d.tokenAddress+'" target="_blank">'+fA(d.tokenAddress)+'</a></span>'
+      +'<span>TGE: '+fD(d.tge)+' '+(d.isTGE ? '&#10003;' : '(pending)')+'</span>'
+    +'</div></div>'
+
+    // Summary
+    +'<div class="summary-grid">'
+      +'<div class="summary-card"><div class="label">Contracts</div><div class="value">'+d.total+'</div></div>'
+      +'<div class="summary-card accent"><div class="label">Unlocked</div><div class="value">'+fN(tU,dec)+'</div><div class="sub">'+fF(tU,dec)+' '+sym+' ('+oP.toFixed(1)+'%)</div></div>'
+      +'<div class="summary-card red"><div class="label">Locked</div><div class="value">'+fN(tL,dec)+'</div><div class="sub">'+fF(tL,dec)+' '+sym+' ('+(100-oP).toFixed(1)+'%)</div></div>'
+      +'<div class="summary-card blue"><div class="label">Claimed / Claimable</div><div class="value">'+fN(tC,dec)+' / '+fN(tCl,dec)+'</div><div class="sub">'+fF(tC,dec)+' / '+fF(tCl,dec)+'</div></div>'
+      +'<div class="summary-card yellow"><div class="label">Grand Total</div><div class="value">'+fN(gT,dec)+'</div><div class="sub">'+fF(gT,dec)+' '+sym+'</div></div>'
+    +'</div>'
+
+    // Desktop table
+    +'<div class="table-wrap">'
+      +'<div class="table-header"><h2>All Vesting Terms</h2><div class="count">'+vs.length+' entries</div></div>'
+      +'<div class="desktop-table"><div class="table-scroll"><table><thead><tr>'
+        +'<th>#</th><th>Beneficiary</th><th>Contract</th><th>Start</th><th>End</th><th>Dur.</th><th>Mile.</th><th>TGE</th><th>Total</th><th>Claimed</th><th>Claimable</th><th>Remain</th><th>Vested</th><th>Status</th>'
+      +'</tr></thead><tbody>'+trows+'</tbody></table></div></div>'
+      // Mobile cards
+      +'<div class="mobile-cards" style="padding:12px">'+mcards+'</div>'
+      +'<div class="rpc-status"><div class="rpc-dot"></div> '+d.rpcUsed+' RPC calls &middot; round-robin across '+RPC_LIST.length+' endpoints &middot; Ethereum Mainnet</div>'
+    +'</div>';
+}
+
+function loadData() {
+  showLoad('Connecting to Ethereum\u2026', 'Round-robin across '+RPC_LIST.length+' public RPCs');
+
+  vestingCall('getVestingContractTotal').then(function(r) {
+    var totalNum = Number(r[0]);
+    showLoad('Found '+totalNum+' vesting contracts', 'Fetching metadata\u2026');
+
+    return Promise.all([
+      vestingCall('getTokenAddress'),
+      vestingCall('getTimeTGE'),
+      vestingCall('isTGE')
+    ]).then(function(meta) {
+      var tokenAddress=String(meta[0][0]), tge=meta[1][0].toString(), isTGE=Boolean(meta[2][0]);
+
+      return Promise.all([
+        erc20Call(tokenAddress,'symbol').catch(function(){return ['???'];}),
+        erc20Call(tokenAddress,'decimals').catch(function(){return [18];}),
+        erc20Call(tokenAddress,'name').catch(function(){return ['Unknown'];})
+      ]).then(function(tok) {
+        var tokenSymbol=String(tok[0][0]), tokenDecimals=Number(tok[1][0]), tokenName=String(tok[2][0]);
+        var BATCH=50, allVestings=[], rpcsUsed=0;
+
+        function fetchBatch(offset) {
+          if (offset>=totalNum) {
+            render({ vestings:allVestings, total:totalNum, tokenSymbol:tokenSymbol, tokenName:tokenName, dec:tokenDecimals, tokenAddress:tokenAddress, tge:tge, isTGE:isTGE, rpcUsed:rpcsUsed });
+            return Promise.resolve();
+          }
+          var limit=Math.min(BATCH,totalNum-offset);
+          showLoad('Fetching vestings '+(offset+1)+'\u2013'+(offset+limit)+' of '+totalNum, allVestings.length+' loaded');
+          rpcsUsed++;
+          return vestingCall('getVestingDetailList',[offset,limit]).then(function(res) {
+            var raw=res[0];
+            for (var j=0;j<raw.length;j++) {
+              var t=raw[j];
+              allVestings.push({
+                contractAddress:String(t[0]), beneficiary:String(t[1]),
+                start:t[2].toString(), end:t[3].toString(),
+                milestoneDuration:t[4].toString(), milestoneClaimed:t[5].toString(),
+                milestoneReleaseAmount:t[6].toString(), unlockedAtTGE:t[7].toString(),
+                totalClaimed:t[8].toString(), balanceClaimable:t[9].toString(), balanceRemain:t[10].toString()
+              });
+            }
+            return fetchBatch(offset+BATCH);
+          });
+        }
+        return fetchBatch(0);
+      });
+    });
+  }).catch(function(err) {
+    var msg='Unknown error';
+    try { msg=err&&err.message?String(err.message):String(err); } catch(x){}
+    showErr(msg);
+  });
+}
+
+loadData();
+</script>
+</body>
+</html>
